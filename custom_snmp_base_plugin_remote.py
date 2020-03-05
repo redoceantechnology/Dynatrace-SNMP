@@ -8,7 +8,9 @@ from dtsnmp.if_mib import IFMIB
 from dtsnmp.snmpv2_mib import SNMPv2MIB
 from dtsnmp.cisco_process_mib import CiscoProcessMIB
 from dtsnmp.f5_bigip_system_mib import F5BigIPSystemMIB
+from dtsnmp.ca_vapp import CAVappMIB
 
+import time
 import ruxit.api.selectors
 from ruxit.api.base_plugin import RemoteBasePlugin
 from ruxit.api.data import PluginMeasurement, PluginProperty, MEAttribute
@@ -17,9 +19,10 @@ from ruxit.api.events import Event, EventMetadata
 
 logger = logging.getLogger(__name__)
 
+
 class CustomSnmpBasePluginRemote(RemoteBasePlugin):
     def initialize(self, **kwargs):
-        config = kwargs['config']      
+        config = kwargs['config']
         debug_logging = config['debug']
         if debug_logging:
             logger.setLevel(logging.DEBUG)
@@ -43,14 +46,14 @@ class CustomSnmpBasePluginRemote(RemoteBasePlugin):
         except Exception as e:
             # Just report the pysnmp exception back to the end user
             info = 'Device connection issue: check snmp access'
-            raise AuthException('{}: {}'.format(info,str(e))) from e
+            raise AuthException('{}: {}'.format(info, str(e))) from e
 
         # Create the group/device entities in Dynatrace
         g1_name = '{0} - {1}'.format(device['type'], device['group'])
         g1 = self.topology_builder.create_group(g1_name, g1_name)
         e1_name = '{0} - {1}'.format(device['type'], device['host'])
         e1 = g1.create_device(e1_name, e1_name)
-        
+
         # Poll for snmp metrics
         metric_queue = Queue()
         thread_list = []
@@ -60,7 +63,7 @@ class CustomSnmpBasePluginRemote(RemoteBasePlugin):
         DEVICE_OBJECT_ID = property_dict['sysObjectID']
         F5_OBJECT_ID = '1.3.6.1.4.1.3375'
         CISCO_OBJECT_ID = '1.3.6.1.4.1.9'
-
+        CA_VAPP_OBJECT_ID = '1.3.6.1.4.1.8072'
         # HOST METRICS
         if DEVICE_OBJECT_ID.startswith(CISCO_OBJECT_ID):
             # Use CISCO PROCESS MIB for Cisco devices
@@ -70,7 +73,10 @@ class CustomSnmpBasePluginRemote(RemoteBasePlugin):
             # USE F5 BIGIP SYSTEM  MIB FOR F5 devices
             f5_mib = F5BigIPSystemMIB(device, authentication)
             mib_list.append(f5_mib)
-        else: 
+        elif DEVICE_OBJECT_ID.startswith(CA_VAPP_OBJECT_ID):
+            ca_mib = CAVappMIB(device, authentication)
+            mib_list.append(ca_mib)
+        else:
             # HOST RESOURCE MIB - Default fallback
             hr_mib = HostResourceMIB(device, authentication)
             mib_list.append(hr_mib)
@@ -80,19 +86,26 @@ class CustomSnmpBasePluginRemote(RemoteBasePlugin):
         if_mib = IFMIB(device, authentication)
         mib_list.append(if_mib)
 
+        logger.info(mib_list)
+
         for mib in mib_list:
             # Lambda function - so that the thread can write poll_metrics() into the queue
-            t = Thread(target=lambda q,mib: q.put(mib.poll_metrics()), args=([metric_queue, mib]))
+            t = Thread(target=lambda q, mib: q.put(mib.poll_metrics()), args=([metric_queue, mib]))
             t.start()
             thread_list.append(t)
         for t in thread_list:
             t.join()
 
+        ###
+
+        time.sleep(1)
+
+        ###
         # Keep track of the custom metrics consumed
         custom_metrics = 0
         # Send metrics and dimensions through to DT
         while not metric_queue.empty():
-            for endpoint,metrics in metric_queue.get().items():
+            for endpoint, metrics in metric_queue.get().items():
                 for metric in metrics:
                     if metric['is_absolute_number']:
                         e1.absolute(key=endpoint, value=metric['value'], dimensions=metric['dimension'])
@@ -101,13 +114,15 @@ class CustomSnmpBasePluginRemote(RemoteBasePlugin):
 
                     custom_metrics += 1
 
-        if custom_metrics == 0:
-            raise NothingToReportException('Connected: But no metrics were returned when polling {}:{}'.format(device['host'], device['port']))
+        # if custom_metrics == 0:
+        #    raise NothingToReportException(
+        #        'Connected: But no metrics were returned when polling {}:{}'.format(device['host'], device['port']))
 
-        e1.add_endpoint(socket.gethostbyname(device['host'])) 
+        e1.add_endpoint(socket.gethostbyname(device['host']))
         property_dict['Custom metrics'] = str(custom_metrics)
-        for key,value in property_dict.items():
+        for key, value in property_dict.items():
             e1.report_property(key, value)
+
 
 # Helper methods
 def _validate_device(config):
@@ -148,6 +163,7 @@ def _validate_device(config):
 
     return device
 
+
 def _validate_authentication(config):
     snmp_version = config.get('snmp_version')
     snmp_user = config.get('snmp_user')
@@ -165,12 +181,12 @@ def _validate_authentication(config):
 
     # Other values can be None...
     # V2
-        # Expected and ignored
+    # Expected and ignored
     # V3
-        # Match SNMP security level
-        # No Auth or Priv = noAuthNoPriv
-        # Auth no Priv = authNoPriv
-        # Auth + Priv = authPriv
+    # Match SNMP security level
+    # No Auth or Priv = noAuthNoPriv
+    # Auth no Priv = authNoPriv
+    # Auth + Priv = authPriv
 
     try:
         snmp_version = int(snmp_version)
@@ -201,9 +217,10 @@ def _validate_authentication(config):
     }
 
     return authentication
-    
+
+
 def _log_inputs(logger, device, authentication):
-    for key,value in device.items():
-        logger.info('{} - {}'.format(key,value))
-    for key,value in authentication.items():
-        logger.info('{} - {}'.format(key,value))
+    for key, value in device.items():
+        logger.info('{} - {}'.format(key, value))
+    for key, value in authentication.items():
+        logger.info('{} - {}'.format(key, value))
