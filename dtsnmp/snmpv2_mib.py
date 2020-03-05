@@ -33,7 +33,7 @@ class SNMPv2MIB():
             '1.3.6.1.2.1.1.6',  # 'sysLocation',
             '1.3.6.1.2.1.1.7',  # 'sysServices',
             '1.3.6.1.2.1.1.8',  # 'sysORLastChange'
-            '.1.3.6.1.2.1.25.1.1.0'  # 'CA uptime'
+            '1.3.6.1.2.1.25.1.1.0'  # 'CA uptime'
         ]
         timeout = 2
         retries = 1
