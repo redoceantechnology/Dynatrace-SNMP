@@ -27,7 +27,8 @@ class SNMPv2MIB():
         mib_properties = [
             '1.3.6.1.2.1.1.1',  # 'sysDescr',
             '1.3.6.1.2.1.1.2',  # 'sysObjectID',
-            '1.3.6.1.2.1.1.3',  # 'sysUpTime',
+            # '1.3.6.1.2.1.1.3',  # 'sysUpTime', Using custom from CA Vapp
+            '1.3.6.1.2.1.25.1.1.0',
             '1.3.6.1.2.1.1.4',  # 'sysContact',
             '1.3.6.1.2.1.1.5',  # 'sysName',
             '1.3.6.1.2.1.1.6',  # 'sysLocation',
