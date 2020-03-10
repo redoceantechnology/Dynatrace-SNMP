@@ -51,11 +51,17 @@ class CAVappMIB():
         return process_metrics(gen, calculate_cpu_metrics)
 
     def _poll_storage(self):
-        storage_metrics = [
+        '''storage_metrics = [
             '1.3.6.1.4.1.2021.9.1.3.1',  # hrStorageDescr
             '1.3.6.1.4.1.2021.9.1.6',  # hrStorageSize
             '1.3.6.1.4.1.2021.9.1.8'  # hrStorageUsed
+        ]'''
+        storage_metrics = [
+            '1.3.6.1.2.1.25.2.3.1.3',  # hrStorageDescr
+            '1.3.6.1.2.1.25.2.3.1.5',  # hrStorageSize
+            '1.3.6.1.2.1.25.2.3.1.6'  # hrStorageUsed
         ]
+
 
         gen = self.poller.snmp_connect_bulk(storage_metrics)
         return process_metrics(gen, calculate_storage_metrics)
